@@ -1,0 +1,6 @@
+node_modules/
+.env
+data/jobs.json
+data/users.json
+dist/
+*.log
