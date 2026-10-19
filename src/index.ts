@@ -148,6 +148,19 @@ bot.on("text", async (ctx: Context, next: () => Promise<void>) => {
     return sendAnonymousMessage(ctx, text);
   }
 
+  // Yaratuvchi haqidagi savollarga aniq va qat'iy javob
+  const lower = text.toLowerCase();
+  if (
+    lower.includes("kim yaratgan") ||
+    lower.includes("yaratuvching") ||
+    lower.includes("muallifing") ||
+    lower.includes("kim qildi") ||
+    lower.includes("kimning botisan") ||
+    lower.includes("egasi kim")
+  ) {
+    return ctx.reply("Meni Suyunov Parviz Jasurovich yaratgan!");
+  }
+
   // Yozish holatini ko'rsatish
   await ctx.sendChatAction("typing");
 
