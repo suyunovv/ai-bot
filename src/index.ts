@@ -16,18 +16,6 @@ const geminiApiKey = process.env.GEMINI_API_KEY;
 
 let botInfo: { username?: string } = {};
 
-// Tezkor javoblar (0 soniyada javob qaytarish uchun)
-const quickReplies: Record<string, string> = {
-  "salom": "Salom! Qalaysiz, yaxshimisiz? 😊",
-  "assalomu alaykum": "Va alaykum assalom! Kuningiz xayrli o'tsin!",
-  "qalaysan": "Rahmat, juda yaxshiman! O'zingizdan gapiring, tinchlikmi?",
-  "qalay": "Zo'r, rahmat! O'zingiz yaxshimisiz?",
-  "nima gap": "Tinchlik, shukur! Sizda qanday yangiliklar bor?",
-  "yaxshiman": "Zo'r, doim shunday bo'lsin! Qanday rejalaringiz bor bugunga?",
-  "rahmat": "Arzimaydi, doim xizmatingizdaman! 😊",
-  "kim bu": "Men Parviz Jasurovich yaratgan AI yordamchisiman!",
-};
-
 // Har bir kelgan foydalanuvchini bazaga yozib boramiz
 bot.use(async (ctx: Context, next: () => Promise<void>) => {
   if (ctx.from) {
@@ -45,31 +33,28 @@ bot.use(async (ctx: Context, next: () => Promise<void>) => {
 bot.command("start", async (ctx) => {
   const name = ctx.from?.first_name || "do'stim";
   await ctx.reply(
-    `Assalomu alaykum, ${name}! 👋\n\nMen siz bilan suhbatlashishga va anonim xabarlarni yetkazishga tayyorman!\n\n` +
+    `Assalomu alaykum, ${name}! 👋\n\nMen siz bilan samimiy suhbatlashishga va anonim xabarlarni yetkazishga tayyorman!\n\n` +
     `💡 Anonim xabar yuborish:\n@username matn\n(Misol: @alisher Salom, bugun ko'rishamizmi?)\n\n` +
     `Menga xohlagan savolingizni berishingiz mumkin. Yuboruvchi kimligi mutlaqo sir saqlanadi! 🤫`
   );
 });
 
-// To'g'ridan-to'g'ri HTTP orqali eng tezkor AI so'rovi (kutishni keskin kamaytiradi)
-async function getFastAIReply(userText: string): Promise<string> {
+// Gemini AI orqali to'laqonli, chuqur va hayotiy javob olish
+async function getAIReply(userText: string): Promise<string> {
   if (!geminiApiKey) {
     return "Salom! Sizga qanday yordam bera olaman?";
   }
 
   const systemPrompt =
-    "Sen samimiy, xushmuomala o'zbek do'stsan. Javobing juda qisqa (ko'pi bilan 1-2 gap) bo'lsin. Rasmiy gapirma. " +
-    "MUHIM: Agar 'seni kim yaratgan?' deb so'rashsa: 'Meni Suyunov Parviz Jasurovich yaratgan!' deb javob ber.";
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 9000); // 9 soniyadan oshib ketmasin
+    "Sen samimiy, juda aqlli, hayotiy va qiziqarli o'zbek do'stsan. " +
+    "Savollarga zerikarli yoki quruq qilib emas, xuddi do'sting bilan choyxonada o'tirgandek sodda, qiziqarli, misollar bilan va hayotiy tushuntir. " +
+    "MUHIM: Agar 'seni kim yaratgan?' yoki muallifing haqida so'rashsa: 'Meni Suyunov Parviz Jasurovich yaratgan!' deb javob ber.";
 
   try {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${geminiApiKey}`;
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      signal: controller.signal,
       body: JSON.stringify({
         contents: [
           {
@@ -77,22 +62,17 @@ async function getFastAIReply(userText: string): Promise<string> {
             parts: [{ text: `${systemPrompt}\n\nFoydalanuvchi: ${userText}` }],
           },
         ],
-        generationConfig: {
-          maxOutputTokens: 50,
-          temperature: 0.7,
-        },
       }),
     });
 
-    clearTimeout(timeout);
     const data: any = await res.json();
     const reply = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
     if (reply) return reply;
-  } catch {
-    clearTimeout(timeout);
+  } catch (e) {
+    console.error("AI xatolik:", e);
   }
 
-  return "Tushundim sizni! Yana biror narsa haqida gaplashamizmi?";
+  return "Zo'r savol bo'ldi! Hozir fikrlarimni jamlab olay, yana bir bor so'rab ko'ringchi!";
 }
 
 // === @username orqali anonim xabar yuborish ===
@@ -150,7 +130,7 @@ bot.on("text", async (ctx: Context, next: () => Promise<void>) => {
     return sendAnonymousMessage(ctx, text);
   }
 
-  // 1. "Seni kim yaratgan?" savoliga ZUMDA (0 soniyada) javob:
+  // 1. "Seni kim yaratgan?" savoliga aniq va g'urur bilan javob:
   const lower = text.toLowerCase().replace(/[?!.,]/g, "").trim();
   if (
     lower.includes("kim yaratgan") ||
@@ -163,24 +143,19 @@ bot.on("text", async (ctx: Context, next: () => Promise<void>) => {
     return ctx.reply("Meni Suyunov Parviz Jasurovich yaratgan!");
   }
 
-  // 2. Keng tarqalgan so'zlarga bir zumda javob:
-  if (quickReplies[lower]) {
-    return ctx.reply(quickReplies[lower]);
-  }
-
-  // 3. typing holati bilan uzluksiz tezkor AI javob:
+  // 2. Typing statusini ushlab turish (javob to'liq tayyor bo'lgunicha):
   const typingTimer = setInterval(() => {
     ctx.sendChatAction("typing").catch(() => {});
-  }, 4000);
+  }, 3500);
   ctx.sendChatAction("typing").catch(() => {});
 
   try {
-    const reply = await getFastAIReply(text);
+    const reply = await getAIReply(text);
     clearInterval(typingTimer);
     await ctx.reply(reply);
   } catch {
     clearInterval(typingTimer);
-    await ctx.reply("Eshitdim! Yana gapiring-chi.");
+    await ctx.reply("Qiziq mavzu! Keling, davom etamiz, yana nima deb o'ylaysiz?");
   }
 });
 
