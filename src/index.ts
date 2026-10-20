@@ -24,19 +24,26 @@ if (geminiApiKey) {
 // Bot ma'lumotlarini saqlash
 let botInfo: { username?: string } = {};
 
+// Tezkor javoblar keshi (tezlikni 0 soniya qilish uchun)
+const quickReplies: Record<string, string> = {
+  "salom": "Salom! Qalaysiz, kayfiyatlar yaxshimi? 😊",
+  "assalomu alaykum": "Va alaykum assalom! Kuningiz xayrli o'tsin!",
+  "qalaysan": "Rahmat, juda yaxshiman! O'zingizdan gapiring, tinchlikmi?",
+  "qalay": "Zo'r, rahmat! O'zingiz yaxshimisiz?",
+  "nima gap": "Tinchlik, shukur! Sizda qanday yangiliklar bor?",
+  "yaxshiman": "Zo'r, doim shunday bo'lsin! Qanday rejalaringiz bor bugunga?",
+  "rahmat": "Arzimaydi, doim xizmatingizdaman! 😊",
+};
+
 // Har bir kelgan foydalanuvchini bazaga yozib boramiz
 bot.use(async (ctx: Context, next: () => Promise<void>) => {
   if (ctx.from) {
-    try {
-      await registerUser({
-        userId: ctx.from.id,
-        username: ctx.from.username ?? null,
-        firstName: ctx.from.first_name ?? null,
-        lastName: ctx.from.last_name ?? null,
-      });
-    } catch (e) {
-      console.error("Foydalanuvchini saqlashda xatolik:", e);
-    }
+    registerUser({
+      userId: ctx.from.id,
+      username: ctx.from.username ?? null,
+      firstName: ctx.from.first_name ?? null,
+      lastName: ctx.from.last_name ?? null,
+    }).catch(() => {});
   }
   return next();
 });
@@ -51,7 +58,7 @@ bot.command("start", async (ctx) => {
   );
 });
 
-// Gemini AI orqali hayotiy, tabiiy javob olish
+// Gemini AI orqali tezkor va hayotiy javob olish
 async function getAIReply(userText: string, userName: string): Promise<string> {
   if (!aiClient) {
     return "Salom! Yaxshimisiz, qanday yangiliklar bor?";
@@ -59,15 +66,15 @@ async function getAIReply(userText: string, userName: string): Promise<string> {
 
   const systemInstruction =
     "Sen samimiy, xushmuomala, aqlli va tabiiy insondek gapiradigan o'zbek do'stsan. " +
-    "Javoblaring qisqa, jonli, hayotiy va suhbatga qiziqish uyg'otadigan bo'lsin. " +
-    "Quruq yoki rasmiy robotdek gapirma. O'zbek tilida so'zlashuv ohangida, kerak bo'lganda hazil va samimiyat bilan javob ber. " +
-    "MUHIM QOIDA: Agar kimdir 'seni kim yaratgan?', 'kimning botisan?', 'muallifing kim?' yoki shunga o'xshash yaratuvchi haqida savol bersa, g'urur va hurmat bilan: 'Meni Suyunov Parviz Jasurovich yaratgan!' deb javob ber.";
+    "Javoblaring juda qisqa (1-2 gap), jonli, hayotiy va suhbatdoshga mos bo'lsin. " +
+    "Ortiqcha cho'zma, rasmiy gapirma. " +
+    "MUHIM: Agar 'seni kim yaratgan?' deb so'rashsa: 'Meni Suyunov Parviz Jasurovich yaratgan!' deb ayt.";
 
+  // Eng tezkor modellar ketma-ketligi
   const modelsToTry = [
-    "gemini-3.5-flash-lite",
-    "gemini-3.6-flash",
-    "gemini-3.7-flash",
-    "gemini-pro-latest"
+    "gemini-3.1-flash-lite",
+    "gemini-flash-lite-latest",
+    "gemini-3.5-flash-lite"
   ];
 
   for (const model of modelsToTry) {
@@ -77,17 +84,18 @@ async function getAIReply(userText: string, userName: string): Promise<string> {
         contents: userText,
         config: {
           systemInstruction,
+          maxOutputTokens: 100, // Tezlikni oshirish uchun qisqa va aniq
         },
       });
 
       const reply = response.text?.trim();
       if (reply) return reply;
-    } catch (error) {
-      console.warn(`Model ${model} vaqtincha band yoki xato, boshqasi tekshirilmoqda...`);
+    } catch {
+      continue;
     }
   }
 
-  return "Eshitdim sizni! Hozir biroz aloqa sekinroq, lekin men shu yerdaman. Davom etavering!";
+  return "Tushundim sizni! Hozir internet biroz sekinroq, yana bir bor yozingchi.";
 }
 
 // === @username orqali anonim xabar yuborish ===
@@ -106,7 +114,6 @@ async function sendAnonymousMessage(ctx: Context, text: string): Promise<void> {
   const [, username, message] = match;
   const targetUsername = username.toLowerCase().trim();
 
-  // Foydalanuvchini qidiramiz
   const targetUser = await findUserByUsername(targetUsername);
 
   if (!targetUser) {
@@ -120,7 +127,6 @@ async function sendAnonymousMessage(ctx: Context, text: string): Promise<void> {
   try {
     const botUserDisplay = botInfo.username ? `@${botInfo.username}` : "Bot";
 
-    // Anonim xabar yuborish: kim yozgani mutlaqo bildirilmaydi!
     await ctx.telegram.sendMessage(
       targetUser.userId,
       `📩 Sizga anonim xabar keldi:\n\n"${message.trim()}"\n\n` +
@@ -149,8 +155,8 @@ bot.on("text", async (ctx: Context, next: () => Promise<void>) => {
     return sendAnonymousMessage(ctx, text);
   }
 
-  // Yaratuvchi haqidagi savollarga aniq va qat'iy javob
-  const lower = text.toLowerCase();
+  // 1. Yaratuvchi haqidagi savollarga darhol (0 soniyada) javob:
+  const lower = text.toLowerCase().replace(/[?!.,]/g, "").trim();
   if (
     lower.includes("kim yaratgan") ||
     lower.includes("yaratuvching") ||
@@ -162,10 +168,13 @@ bot.on("text", async (ctx: Context, next: () => Promise<void>) => {
     return ctx.reply("Meni Suyunov Parviz Jasurovich yaratgan!");
   }
 
-  // Yozish holatini ko'rsatish
-  await ctx.sendChatAction("typing");
+  // 2. Keng tarqalgan oddiy salom-aliklarga keshdan zumda (0 soniyada) javob:
+  if (quickReplies[lower]) {
+    return ctx.reply(quickReplies[lower]);
+  }
 
-  // Gemini AI orqali tirik, hayotiy javob
+  // 3. AI orqali qisqa, tezkor va jonli javob:
+  ctx.sendChatAction("typing").catch(() => {});
   const reply = await getAIReply(text, ctx.from?.first_name || "do'stim");
   await ctx.reply(reply);
 });
