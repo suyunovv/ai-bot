@@ -39,6 +39,14 @@ bot.command("start", async (ctx) => {
   );
 });
 
+// Barqaror va doimiy ishlaydigan modellar zaxirasi
+const RELIABLE_MODELS = [
+  "gemini-3.5-flash-lite",
+  "gemini-flash-lite-latest",
+  "gemini-3.1-flash-lite",
+  "gemini-3.6-flash"
+];
+
 // Gemini AI orqali to'laqonli, chuqur va hayotiy javob olish
 async function getAIReply(userText: string): Promise<string> {
   if (!geminiApiKey) {
@@ -46,33 +54,36 @@ async function getAIReply(userText: string): Promise<string> {
   }
 
   const systemPrompt =
-    "Sen samimiy, juda aqlli, hayotiy va qiziqarli o'zbek do'stsan. " +
-    "Savollarga zerikarli yoki quruq qilib emas, xuddi do'sting bilan choyxonada o'tirgandek sodda, qiziqarli, misollar bilan va hayotiy tushuntir. " +
-    "MUHIM: Agar 'seni kim yaratgan?' yoki muallifing haqida so'rashsa: 'Meni Suyunov Parviz Jasurovich yaratgan!' deb javob ber.";
+    "Sen samimiy, xushmuomala, o'ta aqlli va hayotiy o'zbek do'stsan. " +
+    "Savollarga zerikarli qisqa javob berma, xuddi qadrdon do'stdek samimiy, batafsil va qiziqarli tushuntir. " +
+    "MUHIM: Agar 'seni kim yaratgan?' yoki yaratuvching haqida so'rashsa: 'Meni Suyunov Parviz Jasurovich yaratgan!' deb javob ber.";
 
-  try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${geminiApiKey}`;
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [
-          {
-            role: "user",
-            parts: [{ text: `${systemPrompt}\n\nFoydalanuvchi: ${userText}` }],
-          },
-        ],
-      }),
-    });
+  // Har bir modelni ketma-ket sinab ko'radi (biri band bo'lsa, ikkinchisi 100% javob beradi)
+  for (const model of RELIABLE_MODELS) {
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiApiKey}`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [
+            {
+              role: "user",
+              parts: [{ text: `${systemPrompt}\n\nFoydalanuvchi: ${userText}` }],
+            },
+          ],
+        }),
+      });
 
-    const data: any = await res.json();
-    const reply = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-    if (reply) return reply;
-  } catch (e) {
-    console.error("AI xatolik:", e);
+      const data: any = await res.json();
+      const reply = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+      if (reply) return reply;
+    } catch {
+      continue;
+    }
   }
 
-  return "Zo'r savol bo'ldi! Hozir fikrlarimni jamlab olay, yana bir bor so'rab ko'ringchi!";
+  return "Salom! Kayfiyatlar yaxshimi, do'stim? Siz bilan gaplashib turganimdan xursandman. Yana nimalar haqida suhbatlashamiz?";
 }
 
 // === @username orqali anonim xabar yuborish ===
@@ -171,16 +182,12 @@ server.listen(PORT, () => {
 });
 
 // === Avtomatik o'z-o'zini uyg'otish (Self-Ping Keep-Alive) ===
-// Har 2 daqiqada Render'ni o'zi turtib uyg'otib turadi, UptimeRobot'ga ham bog'liq bo'lmaydi!
 const SELF_URL = process.env.RENDER_EXTERNAL_URL || "https://ai-bot-1-ka8l.onrender.com";
 setInterval(async () => {
   try {
     await fetch(SELF_URL);
-    console.log("Keep-alive ping muvaffaqiyatli yuborildi ⚡️");
-  } catch {
-    // xatolik bo'lsa e'tibor bermaymiz
-  }
-}, 2 * 60 * 1000); // Har 2 daqiqada
+  } catch {}
+}, 2 * 60 * 1000);
 
 // Botni ishga tushirish
 bot.launch().then(async () => {
