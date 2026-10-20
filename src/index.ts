@@ -143,7 +143,7 @@ bot.on("text", async (ctx: Context, next: () => Promise<void>) => {
     return ctx.reply("Meni Suyunov Parviz Jasurovich yaratgan!");
   }
 
-  // 2. Typing statusini ushlab turish (javob to'liq tayyor bo'lgunicha):
+  // 2. Typing statusini ushlab turish:
   const typingTimer = setInterval(() => {
     ctx.sendChatAction("typing").catch(() => {});
   }, 3500);
@@ -159,7 +159,7 @@ bot.on("text", async (ctx: Context, next: () => Promise<void>) => {
   }
 });
 
-// === Render.com 24/7 o'chib qolmasligi uchun HTTP Server ===
+// === Render Web Service 24/7 port ===
 const PORT = process.env.PORT || 10000;
 const server = createServer((req, res) => {
   res.writeHead(200, { "Content-Type": "text/plain" });
@@ -167,8 +167,20 @@ const server = createServer((req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`Render Web Service port ${PORT} da muvaffaqiyatli tinglamoqda ✅`);
+  console.log(`Web Service port ${PORT} da muvaffaqiyatli tinglamoqda ✅`);
 });
+
+// === Avtomatik o'z-o'zini uyg'otish (Self-Ping Keep-Alive) ===
+// Har 2 daqiqada Render'ni o'zi turtib uyg'otib turadi, UptimeRobot'ga ham bog'liq bo'lmaydi!
+const SELF_URL = process.env.RENDER_EXTERNAL_URL || "https://ai-bot-1-ka8l.onrender.com";
+setInterval(async () => {
+  try {
+    await fetch(SELF_URL);
+    console.log("Keep-alive ping muvaffaqiyatli yuborildi ⚡️");
+  } catch {
+    // xatolik bo'lsa e'tibor bermaymiz
+  }
+}, 2 * 60 * 1000); // Har 2 daqiqada
 
 // Botni ishga tushirish
 bot.launch().then(async () => {
