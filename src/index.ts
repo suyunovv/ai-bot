@@ -1,4 +1,5 @@
 import { Telegraf, type Context } from "telegraf";
+import { createServer } from "http";
 import { config } from "dotenv";
 import { GoogleGenAI } from "@google/genai";
 import { registerUser, findUserByUsername } from "./users.js";
@@ -169,6 +170,17 @@ bot.on("text", async (ctx: Context, next: () => Promise<void>) => {
   await ctx.reply(reply);
 });
 
+// === Render.com 24/7 o'chib qolmasligi uchun HTTP Server ===
+const PORT = process.env.PORT || 10000;
+const server = createServer((req, res) => {
+  res.writeHead(200, { "Content-Type": "text/plain" });
+  res.end("Bot 24/7 is running successfully! 🚀\n");
+});
+
+server.listen(PORT, () => {
+  console.log(`Render Web Service port ${PORT} da muvaffaqiyatli tinglamoqda ✅`);
+});
+
 // Botni ishga tushirish
 bot.launch().then(async () => {
   try {
@@ -181,5 +193,11 @@ bot.launch().then(async () => {
 });
 
 // To'xtatish signallari
-process.once("SIGINT", () => bot.stop("SIGINT"));
-process.once("SIGTERM", () => bot.stop("SIGTERM"));
+process.once("SIGINT", () => {
+  bot.stop("SIGINT");
+  server.close();
+});
+process.once("SIGTERM", () => {
+  bot.stop("SIGTERM");
+  server.close();
+});
